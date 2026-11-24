@@ -1,0 +1,14 @@
+/target
+/.dioxus
+/dist
+/cache
+*.log
+.DS_Store
+
+# données de jeu générées (voir data/README.md)
+data/*.json
+assets/sprites.json
+assets/icon.png
+
+# généré par cargo/CI (trop volumineux pour l'API de commit)
+Cargo.lock
