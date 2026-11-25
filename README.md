@@ -37,20 +37,15 @@ Scraped (rate-limited, parallel, resumable) from the fan wiki
 
 ## Build
 
-Requirements: [Rust](https://rustup.rs), Python 3 (for the data pipeline) and, for the
-desktop target, `libwebkit2gtk-4.1-dev` + `libgtk-3-dev` (Debian/Ubuntu:
-`sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev`).
+Requirements: [Rust](https://rustup.rs), Python 3 (for the bundle icon and the optional
+data pipeline) and, for the desktop target, `libwebkit2gtk-4.1-dev` + `libgtk-3-dev` +
+`libxdo-dev` (Debian/Ubuntu: `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev`).
 
 ```sh
-# 1. generate the game data (~4 min, one time — see "Data pipeline" below)
-python3 scripts/fetch_all.py
-python3 scripts/fetch_sprites.py
-python3 scripts/build_data.py
+# 1. generate the bundle icon (deterministic, stdlib only)
+python3 scripts/gen_icon.py
 
-# 2. restore the bundle icon (stored as base64 in-repo)
-python3 -c "import base64; open('assets/icon.png','wb').write(base64.b64decode(open('assets/icon.png.b64').read().strip()))"
-
-# 3. build & run (desktop)
+# 2. build & run (desktop) — game data is committed, nothing to generate
 cargo run --release
 
 # or with the Dioxus CLI (hot reload, bundling)
@@ -76,7 +71,8 @@ dx build --platform android --release --no-default-features --features mobile --
 
 ## CI & artifacts
 
-GitHub Actions (`.github/workflows/ci.yml`) builds on every push/PR:
+GitHub Actions (`.github/workflows/ci.yml`) builds on every push/PR, entirely
+from the **committed game data** (no network scraping in CI):
 
 - **Linux x86_64**: standalone binary `tar.gz`, `.deb` package and `AppImage`
 - **Android**: release `arm64-v8a` APK (CI-signed with a generated keystore —
@@ -84,21 +80,25 @@ GitHub Actions (`.github/workflows/ci.yml`) builds on every push/PR:
 
 ## Data pipeline
 
-The game data is **not committed** to the repository (keeping copyrighted game
-content out of git history). It is generated from the fan wiki
-[soshage.com/dqm2sp](https://soshage.com/dqm2sp/) through its SvelteKit data
-endpoints, then normalized into compact JSON:
+The generated game data (`data/*.json` + `assets/sprites.json`) is **committed**
+to the repository so that builds are hermetic: a fresh clone — or the CI — can
+build the complete app without depending on the availability of the fan wiki
+[soshage.com/dqm2sp](https://soshage.com/dqm2sp/).
+
+To regenerate the data (only when an update is needed — the wiki must be up):
 
 ```sh
 python3 scripts/fetch_all.py     # scrape all pages → cache/ (parallel, resumable)
 python3 scripts/fetch_sprites.py # download webp sprites → cache/sprites/
 python3 scripts/build_data.py    # normalize → data/*.json + assets/sprites.json
+python3 scripts/verify_data.py   # sanity-check the generated files
+git add data assets/sprites.json && git commit -m "data: refresh from soshage.com"
 ```
 
 The resulting `data/*.json` and `assets/sprites.json` are embedded into the
 binary at compile time (`include_str!`) — **the built app never accesses the
-network**. The CI runs the same pipeline automatically (cached between runs
-with `actions/cache`).
+network**. The CI validates the committed data (`scripts/verify_data.py`) and
+never scrapes.
 
 ## License
 

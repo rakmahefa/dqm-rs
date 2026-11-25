@@ -5,10 +5,7 @@
 *.log
 .DS_Store
 
-# données de jeu générées (voir data/README.md)
-data/*.json
-assets/sprites.json
+# Les données de jeu générées (data/*.json, assets/sprites.json) sont désormais
+# COMMITTÉES pour des builds hermétiques (CI sans scraping) — voir data/README.md.
+# L'icône du bundle reste générée localement par scripts/gen_icon.py (jamais commitée).
 assets/icon.png
-
-# généré par cargo/CI (trop volumineux pour l'API de commit)
-Cargo.lock
