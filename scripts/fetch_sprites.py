@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,18 +23,60 @@ UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) dqm-rs-scraper/0.1"}
 def fetch(url, dest, rate=0.02):
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
         return True
-    time.sleep(rate)
+
+    retryable = {408, 425, 429, 500, 502, 503, 504}
+    max_attempts = 6
     req = urllib.request.Request(url, headers=UA)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            data = r.read()
-        with open(dest, "wb") as f:
-            f.write(data)
-        return True
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return False
-        raise
+
+    for attempt in range(1, max_attempts + 1):
+        if rate:
+            time.sleep(rate)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                data = response.read()
+            if not data:
+                raise urllib.error.URLError(f"Réponse vide pour {url}")
+
+            tmp = f"{dest}.tmp{os.getpid()}"
+            try:
+                with open(tmp, "wb") as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(tmp, dest)
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return False
+            if exc.code not in retryable or attempt == max_attempts:
+                raise
+            retry_after = exc.headers.get("Retry-After")
+            delay = min(45.0, 2.0 ** attempt)
+            try:
+                if retry_after:
+                    delay = max(delay, min(120.0, float(retry_after)))
+            except (TypeError, ValueError):
+                pass
+            print(
+                f"[http] {url}: HTTP {exc.code}, tentative {attempt}/{max_attempts}; "
+                f"nouvel essai dans {delay:.0f}s",
+                flush=True,
+            )
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            if attempt == max_attempts:
+                raise
+            delay = min(45.0, 2.0 ** attempt)
+            print(
+                f"[http] {url}: {exc}, tentative {attempt}/{max_attempts}; "
+                f"nouvel essai dans {delay:.0f}s",
+                flush=True,
+            )
+        time.sleep(delay)
+
+    raise RuntimeError(f"Impossible de télécharger après {max_attempts} tentatives: {url}")
 
 
 def main():

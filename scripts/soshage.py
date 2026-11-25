@@ -3,12 +3,26 @@
 import gzip
 import json
 import time
+import urllib.error
 import urllib.request
 import urllib.parse
 import zlib
+import sys
 
 BASE = "https://soshage.com/dqm2sp"
 UA = "Mozilla/5.0 (X11; Linux x86_64) dqm-rs-scraper/0.1 (github.com/rakmahefa/dqm-rs)"
+MAX_HTTP_ATTEMPTS = 6
+RETRYABLE_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
+def retry_delay(attempt, retry_after=None):
+    delay = min(45.0, 2.0 ** attempt)
+    if retry_after:
+        try:
+            delay = max(delay, min(120.0, float(retry_after)))
+        except (TypeError, ValueError):
+            pass
+    return delay
 
 
 def unflatten(flat):
@@ -76,19 +90,43 @@ class Client:
         self._last = time.time()
 
     def raw(self, path, accept_gzip=True):
-        self._throttle()
         url = path if path.startswith("http") else f"{BASE}{path}"
         headers = {"User-Agent": UA}
         if accept_gzip:
             headers["Accept-Encoding"] = "gzip"
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = r.read()
-            if r.headers.get("Content-Encoding") == "gzip" or data[:2] == b"\x1f\x8b":
-                data = gzip.decompress(data)
-            self.n_requests += 1
-            self.bytes_wire += len(data)
-            return data
+
+        for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
+            self._throttle()
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    data = r.read()
+                    if r.headers.get("Content-Encoding") == "gzip" or data[:2] == b"\x1f\x8b":
+                        data = gzip.decompress(data)
+                    self.n_requests += 1
+                    self.bytes_wire += len(data)
+                    return data
+            except urllib.error.HTTPError as exc:
+                if exc.code not in RETRYABLE_HTTP_STATUS or attempt == MAX_HTTP_ATTEMPTS:
+                    raise
+                delay = retry_delay(attempt, exc.headers.get("Retry-After"))
+                print(
+                    f"[http] {url}: HTTP {exc.code}, tentative "
+                    f"{attempt}/{MAX_HTTP_ATTEMPTS}; nouvel essai dans {delay:.0f}s",
+                    file=sys.stderr, flush=True,
+                )
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+                if attempt == MAX_HTTP_ATTEMPTS:
+                    raise
+                delay = retry_delay(attempt)
+                print(
+                    f"[http] {url}: {exc}, tentative "
+                    f"{attempt}/{MAX_HTTP_ATTEMPTS}; nouvel essai dans {delay:.0f}s",
+                    file=sys.stderr, flush=True,
+                )
+            time.sleep(delay)
+
+        raise RuntimeError(f"Request failed after {MAX_HTTP_ATTEMPTS} attempts: {url}")
 
     def payload(self, path):
         """GET {path}/__data.json → liste des payloads dévalués."""
