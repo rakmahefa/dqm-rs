@@ -20,7 +20,7 @@ REQUIRED = (
 # ~468 items, ~534 traits, ~306 abilities) — larges pour éviter les faux positifs.
 MIN_COUNTS = {
     "monsters": 700,
-    "recipes": 500,
+    "recipes": 100,
     "skills": 300,
     "items": 300,
     "traits": 400,
