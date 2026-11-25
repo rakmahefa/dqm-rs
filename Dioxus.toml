@@ -1,0 +1,15 @@
+[application]
+name = "DQM2 SP Companion"
+default_platform = "desktop"
+
+[web.app]
+title = "DQM2 SP Companion"
+
+[bundle]
+identifier = "com.rakmahefa.dqmrs"
+publisher = "rakmahefa"
+icon = ["assets/icon.png"]
+copyright = "Unofficial fan-made companion. Game data (c) Square Enix."
+category = "Game"
+short_description = "Offline encyclopedia and synthesis planner for Dragon Quest Monsters 2 SP"
+long_description = "A 100% offline companion app for Dragon Quest Monsters 2 SP: browse all monsters, skills, items, traits and abilities, explore the full synthesis tree, plan optimal breeding routes and check egg hatching probabilities. All data is embedded in the binary - no network access required."

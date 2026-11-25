@@ -1,0 +1,11 @@
+/target
+/.dioxus
+/dist
+/cache
+*.log
+.DS_Store
+
+# Les données de jeu générées (data/*.json, assets/sprites.json) sont désormais
+# COMMITTÉES pour des builds hermétiques (CI sans scraping) — voir data/README.md.
+# L'icône du bundle reste générée localement par scripts/gen_icon.py (jamais commitée).
+assets/icon.png
